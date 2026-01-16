@@ -20,6 +20,11 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Yutori API Key for Research and Browsing APIs
+  
+  TinyFishApiKey:
+    Type: String
+    NoEcho: true
+    Description: TinyFish API Key for Web Agent automation
 
 Resources:
   # API Gateway
@@ -68,6 +73,22 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
   
+  BackgroundFillFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/background_fill/
+      Handler: handler.lambda_handler
+      Timeout: 600  # 10 minutes for form filling
+      MemorySize: 512
+      Environment:
+        Variables:
+          TINYFISH_API_KEY: !Ref TinyFishApiKey
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+  
   GetTaskFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -109,16 +130,16 @@ Resources:
     Properties:
       CodeUri: src/lambdas/fill_form/
       Handler: handler.lambda_handler
-      Timeout: 600
+      Environment:
+        Variables:
+          BACKGROUND_FILL_FUNCTION: !Ref BackgroundFillFunction
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref JobsTable
         - DynamoDBCrudPolicy:
-            TableName: !Ref KitsTable
-        - DynamoDBCrudPolicy:
             TableName: !Ref TasksTable
-        - S3CrudPolicy:
-            BucketName: !Ref ArtifactsBucket
+        - LambdaInvokePolicy:
+            FunctionName: !Ref BackgroundFillFunction
       Events:
         FillForm:
           Type: Api

@@ -34,6 +34,17 @@ const elements = {
     coverLetterDisplay: document.getElementById('cover-letter-display'),
     resumeBulletsDisplay: document.getElementById('resume-bullets-display'),
     downloadCoverLetter: document.getElementById('download-cover-letter'),
+    fillFormButton: document.getElementById('fill-form-button'),
+    
+    customUrlSection: document.getElementById('custom-url-section'),
+    customUrl: document.getElementById('custom-url'),
+    fillCustomUrlButton: document.getElementById('fill-custom-url-button'),
+    
+    formFillSection: document.getElementById('form-fill-section'),
+    formFillStatus: document.getElementById('form-fill-status'),
+    formFillResult: document.getElementById('form-fill-result'),
+    screenshotContainer: document.getElementById('screenshot-container'),
+    filledFieldsContainer: document.getElementById('filled-fields-container'),
     
     loadingOverlay: document.getElementById('loading-overlay'),
     loadingText: document.getElementById('loading-text')
@@ -422,6 +433,174 @@ elements.downloadCoverLetter.addEventListener('click', () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 });
+
+// Fill Application Form with TinyFish
+elements.fillFormButton.addEventListener('click', async () => {
+    if (!appState.selectedJob) {
+        alert('Please select a job first');
+        return;
+    }
+    
+    if (!appState.currentKit) {
+        alert('Please generate an application kit first');
+        return;
+    }
+    
+    await fillFormWithTinyFish(appState.selectedJob.url, appState.selectedJob.job_id);
+});
+
+// Fill Custom URL Form
+elements.fillCustomUrlButton.addEventListener('click', async () => {
+    const customUrl = elements.customUrl.value.trim();
+    
+    if (!customUrl) {
+        alert('Please enter a URL');
+        return;
+    }
+    
+    if (!customUrl.startsWith('http://') && !customUrl.startsWith('https://')) {
+        alert('Please enter a valid URL (starting with http:// or https://)');
+        return;
+    }
+    
+    await fillFormWithTinyFish(customUrl, 'custom');
+});
+
+async function fillFormWithTinyFish(applicationUrl, jobId) {
+    showLoading('Starting form filling with TinyFish...');
+    
+    try {
+        // Prepare application data from current state
+        const applicationData = {
+            full_name: 'John Doe',  // TODO: Get from user profile
+            email: 'john@example.com',  // TODO: Get from user profile
+            phone: '+1234567890',  // TODO: Get from user profile
+            resume_url: appState.resumeS3Key ? `https://s3.amazonaws.com/bucket/${appState.resumeS3Key}` : '',
+            cover_letter: elements.coverLetterDisplay.value || 'Cover letter not generated yet',
+            linkedin: '',  // TODO: Add input field
+            portfolio: '',  // TODO: Add input field
+            years_experience: '5'  // TODO: Add input field
+        };
+        
+        const response = await apiCall(
+            API_CONFIG.ENDPOINTS.FILL_FORM,
+            'POST',
+            {
+                job_id: jobId,
+                application_url: applicationUrl,
+                application_data: applicationData
+            }
+        );
+        
+        // Start polling for form fill completion
+        const taskId = response.task_id;
+        showLoading(`Filling form... Task ID: ${taskId}`);
+        
+        await pollFormFillTask(taskId);
+        
+    } catch (error) {
+        hideLoading();
+        alert(`Form filling failed: ${error.message}`);
+    }
+}
+
+async function pollFormFillTask(taskId) {
+    let attempts = 0;
+    const startTime = Date.now();
+    
+    const pollInterval = setInterval(async () => {
+        attempts++;
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        
+        elements.loadingText.textContent = `Filling form with TinyFish... ${elapsed}s elapsed`;
+        console.log(`[Form Fill Poll ${attempts}] Checking task ${taskId}...`);
+        
+        try {
+            const taskResponse = await fetch(
+                `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.GET_TASK}/${taskId}`
+            );
+            
+            if (!taskResponse.ok) {
+                throw new Error(`Failed to check task status: ${taskResponse.status}`);
+            }
+            
+            const task = await taskResponse.json();
+            console.log(`[Form Fill Poll ${attempts}] Task status:`, task.status);
+            
+            if (task.status === 'completed') {
+                clearInterval(pollInterval);
+                hideLoading();
+                displayFormFillResult(task.result);
+                elements.formFillSection.scrollIntoView({ behavior: 'smooth' });
+            } else if (task.status === 'failed') {
+                clearInterval(pollInterval);
+                hideLoading();
+                alert(`Form filling failed: ${task.error_message || 'Unknown error'}`);
+            } else if (attempts >= API_CONFIG.POLLING.MAX_ATTEMPTS) {
+                clearInterval(pollInterval);
+                hideLoading();
+                alert(`Form filling timed out after ${elapsed} seconds. Task ID: ${taskId}`);
+            }
+            
+        } catch (error) {
+            console.error(`[Form Fill Poll ${attempts}] Error:`, error);
+            // Continue polling despite errors
+        }
+        
+    }, API_CONFIG.POLLING.INTERVAL);
+}
+
+function displayFormFillResult(result) {
+    console.log('[Form Fill] Result received:', result);
+    
+    elements.formFillStatus.textContent = '✅ Form filled successfully!';
+    elements.formFillStatus.className = 'status-message success';
+    elements.formFillStatus.style.display = 'block';
+    
+    // Display screenshot if available
+    if (result.screenshot_url) {
+        console.log('[Form Fill] Screenshot URL:', result.screenshot_url);
+        elements.screenshotContainer.innerHTML = `
+            <div class="screenshot">
+                <h4>Form Screenshot</h4>
+                <img src="${result.screenshot_url}" alt="Filled form screenshot" style="max-width: 100%; border-radius: 8px; margin-top: 10px;">
+            </div>
+        `;
+    } else {
+        console.log('[Form Fill] No screenshot_url in result');
+        elements.screenshotContainer.innerHTML = `
+            <div class="screenshot">
+                <p style="color: #94a3b8;">No screenshot available</p>
+            </div>
+        `;
+    }
+    
+    // Display filled fields
+    if (result.filled_fields && Object.keys(result.filled_fields).length > 0) {
+        console.log('[Form Fill] Filled fields:', result.filled_fields);
+        const fieldsHtml = Object.entries(result.filled_fields)
+            .map(([key, value]) => `<li><strong>${key}:</strong> ${value}</li>`)
+            .join('');
+        
+        elements.filledFieldsContainer.innerHTML = `
+            <div class="filled-fields">
+                <h4>Filled Fields</h4>
+                <ul>${fieldsHtml}</ul>
+            </div>
+        `;
+    } else {
+        console.log('[Form Fill] No filled_fields in result');
+        elements.filledFieldsContainer.innerHTML = `
+            <div class="filled-fields">
+                <h4>Response Data</h4>
+                <pre style="background: #1e293b; padding: 15px; border-radius: 8px; overflow-x: auto;">${JSON.stringify(result, null, 2)}</pre>
+            </div>
+        `;
+    }
+    
+    elements.formFillResult.style.display = 'block';
+    elements.formFillSection.style.display = 'block';
+}
 
 // Initialize
 console.log('JobScoutAI Frontend initialized');
