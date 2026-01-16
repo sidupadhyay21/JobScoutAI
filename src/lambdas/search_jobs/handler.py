@@ -1,16 +1,18 @@
 """
-Lambda function to search for jobs using Yutori Research API
+Lambda function to search for jobs using Yutori Research API (async pattern)
 """
 import json
 import os
-from shared.yutori_client import YutoriClient
+import hashlib
+from datetime import datetime
+import boto3
+
 from shared.dynamodb_utils import DynamoDBClient
-from shared.models import Job, JobStatus
 
 
 def lambda_handler(event, context):
     """
-    Search for jobs using Yutori Research API
+    Create async search task and trigger background processing
     
     Request body:
     {
@@ -19,11 +21,11 @@ def lambda_handler(event, context):
         "max_results": 10
     }
     
-    Returns:
+    Returns immediately with task_id:
     {
-        "jobs": [...],
-        "count": 10,
-        "task_id": "..."
+        "task_id": "...",
+        "status": "pending",
+        "message": "Search task created"
     }
     """
     try:
@@ -43,59 +45,53 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': 'query is required'})
             }
         
-        # Initialize clients
-        yutori = YutoriClient()
+        # Create task ID
+        task_id = hashlib.sha256(
+            f"search_{query}_{location}_{datetime.now().isoformat()}".encode()
+        ).hexdigest()[:16]
+        
+        # Initialize DynamoDB client
         dynamodb = DynamoDBClient()
         
-        # Build search query
-        search_query = f"{query}"
-        if location:
-            search_query += f" in {location}"
+        # Create task in DynamoDB
+        task_data = {
+            'task_id': task_id,
+            'task_type': 'job_search',
+            'user_id': 'demo_user',
+            'status': 'pending',
+            'query': query,
+            'location': location,
+            'max_results': max_results,
+            'created_at': int(datetime.now().timestamp()),
+            'updated_at': int(datetime.now().timestamp())
+        }
+        dynamodb.create_task(task_data)
         
-        print(f"Searching for: {search_query}")
-        
-        # Call Yutori Research API
-        result = yutori.search_jobs(
-            query=search_query,
-            location=location,
-            max_results=max_results
+        # Invoke background Lambda asynchronously
+        lambda_client = boto3.client('lambda')
+        lambda_client.invoke(
+            FunctionName=os.environ.get('BACKGROUND_SEARCH_FUNCTION'),
+            InvocationType='Event',  # Async invocation
+            Payload=json.dumps({
+                'task_id': task_id,
+                'query': query,
+                'location': location,
+                'max_results': max_results
+            })
         )
         
-        print(f"Yutori response: {result}")
-        
-        # Parse and save jobs
-        jobs = []
-        if isinstance(result, list):
-            job_list = result
-        else:
-            job_list = result.get('jobs', [])
-            
-        for job_data in job_list:
-            job = Job(
-                title=job_data.get('title', 'Untitled'),
-                company=job_data.get('company', 'Unknown'),
-                location=job_data.get('location', location),
-                description=job_data.get('description', ''),
-                url=job_data.get('url', ''),
-                posted_date=job_data.get('posted_date'),
-                salary_range=job_data.get('salary_range'),
-                status=JobStatus.SAVED
-            )
-            
-            # Save to DynamoDB
-            dynamodb.save_job(job)
-            jobs.append(job.to_dict())
+        print(f"Created search task {task_id} for query: {query}")
         
         return {
-            'statusCode': 200,
+            'statusCode': 202,  # Accepted
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
             'body': json.dumps({
-                'jobs': jobs,
-                'count': len(jobs),
-                'message': 'Jobs retrieved successfully'
+                'task_id': task_id,
+                'status': 'pending',
+                'message': 'Search task created. Poll /tasks/{task_id} for results.'
             })
         }
     
@@ -111,11 +107,6 @@ def lambda_handler(event, context):
             },
             'body': json.dumps({
                 'error': str(e),
-                'message': 'Failed to search jobs'
+                'message': 'Failed to create search task'
             })
-        }
-        return {
-            'statusCode': 500,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': str(e)})
         }

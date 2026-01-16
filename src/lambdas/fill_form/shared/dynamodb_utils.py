@@ -81,16 +81,21 @@ class DynamoDBClient:
     
     def update_task_status(self, task_id: str, status: str, 
                           filled_fields: Optional[Dict[str, str]] = None,
-                          error_message: Optional[str] = None) -> None:
+                          error_message: Optional[str] = None,
+                          result: Optional[Dict[str, Any]] = None) -> None:
         """Update task status and fields"""
         from datetime import datetime
         
-        update_expr = 'SET #status = :status, completed_at = :completed_at'
+        update_expr = 'SET #status = :status, updated_at = :updated_at'
         expr_names = {'#status': 'status'}
         expr_values = {
             ':status': status,
-            ':completed_at': int(datetime.now().timestamp())
+            ':updated_at': int(datetime.now().timestamp())
         }
+        
+        if status in ['completed', 'failed']:
+            update_expr += ', completed_at = :completed_at'
+            expr_values[':completed_at'] = int(datetime.now().timestamp())
         
         if filled_fields:
             update_expr += ', filled_fields = :filled_fields'
@@ -99,6 +104,11 @@ class DynamoDBClient:
         if error_message:
             update_expr += ', error_message = :error_message'
             expr_values[':error_message'] = error_message
+            
+        if result:
+            update_expr += ', #result = :result'
+            expr_names['#result'] = 'result'  # Reserved keyword
+            expr_values[':result'] = result
         
         self.tasks_table.update_item(
             Key={'task_id': task_id},

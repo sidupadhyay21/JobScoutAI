@@ -9,13 +9,13 @@
 <body>
     <div class="container">
         <header>
-            <h1>🎯 JobScoutAI</h1>
+            <h1>JobScoutAI</h1>
             <p class="subtitle">Your intelligent job application assistant</p>
         </header>
 
         <!-- Resume Upload Section -->
         <section class="card" id="resume-section">
-            <h2>📄 Upload Your Resume</h2>
+            <h2>Upload Your Resume</h2>
             <div class="upload-area" id="upload-area">
                 <input type="file" id="resume-upload" accept=".pdf" hidden>
                 <label for="resume-upload" class="upload-label">
@@ -32,14 +32,14 @@
 
         <!-- Job Search Section -->
         <section class="card" id="search-section">
-            <h2>🔍 Search for Jobs</h2>
+            <h2>Search for Jobs</h2>
             <div class="form-group">
                 <label for="job-query">Job Title / Keywords</label>
                 <input 
                     type="text" 
                     id="job-query" 
                     placeholder="e.g., software engineer, data scientist, product manager"
-                    value="software engineer"
+                    value="Software Engineer"
                 >
             </div>
             <div class="form-group">
@@ -62,20 +62,20 @@
                 >
             </div>
             <button id="search-button" class="btn btn-primary">
-                🔍 Search Jobs
+                Search Jobs
             </button>
         </section>
 
         <!-- Job Results Section -->
         <section class="card" id="results-section" style="display: none;">
-            <h2>📊 Job Results</h2>
+            <h2>Job Results</h2>
             <div id="results-count" class="results-count"></div>
             <div id="jobs-container" class="jobs-container"></div>
         </section>
 
         <!-- Application Kit Section -->
         <section class="card" id="kit-section" style="display: none;">
-            <h2>📝 Generate Application Kit</h2>
+            <h2>Generate Application Kit</h2>
             <div id="selected-job-info" class="job-info"></div>
             <div class="form-group">
                 <label for="user-context">Your Experience & Skills</label>
@@ -86,13 +86,13 @@
                 ></textarea>
             </div>
             <button id="generate-kit-button" class="btn btn-success">
-                ✨ Generate Application Kit
+                Generate Application Kit
             </button>
         </section>
 
         <!-- Kit Display Section -->
         <section class="card" id="kit-display-section" style="display: none;">
-            <h2>📋 Your Application Kit</h2>
+            <h2>Your Application Kit</h2>
             
             <div class="kit-item">
                 <h3>Cover Letter</h3>
@@ -103,7 +103,7 @@
                     class="kit-display"
                 ></textarea>
                 <button id="download-cover-letter" class="btn btn-secondary">
-                    📥 Download Cover Letter
+                    Download Cover Letter
                 </button>
             </div>
 

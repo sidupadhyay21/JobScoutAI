@@ -38,11 +38,14 @@ Resources:
     Properties:
       CodeUri: src/lambdas/search_jobs/
       Handler: handler.lambda_handler
+      Environment:
+        Variables:
+          BACKGROUND_SEARCH_FUNCTION: !Ref BackgroundSearchFunction
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref JobsTable
-        - S3CrudPolicy:
-            BucketName: !Ref ArtifactsBucket
+            TableName: !Ref TasksTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref BackgroundSearchFunction
       Events:
         SearchJobs:
           Type: Api
@@ -50,6 +53,36 @@ Resources:
             RestApiId: !Ref JobScoutAPI
             Path: /jobs/search
             Method: post
+    DependsOn: BackgroundSearchFunction
+  
+  BackgroundSearchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/background_search/
+      Handler: handler.lambda_handler
+      Timeout: 900  # 15 minutes for long-running Yutori calls
+      MemorySize: 1024
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+  
+  GetTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/get_task/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref TasksTable
+      Events:
+        GetTask:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobScoutAPI
+            Path: /tasks/{task_id}
+            Method: get
 
   GenerateKitFunction:
     Type: AWS::Serverless::Function

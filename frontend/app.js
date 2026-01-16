@@ -5,7 +5,8 @@ const appState = {
     selectedFile: null,
     selectedJob: null,
     searchResults: [],
-    currentKit: null
+    currentKit: null,
+    lastSearchResponse: null
 };
 
 // DOM Elements
@@ -183,9 +184,10 @@ elements.searchButton.addEventListener('click', async () => {
         return;
     }
     
-    showLoading('Searching for jobs...');
+    showLoading('Creating search task...');
     
     try {
+        // Create async search task
         const response = await apiCall(
             API_CONFIG.ENDPOINTS.SEARCH_JOBS,
             'POST',
@@ -196,15 +198,101 @@ elements.searchButton.addEventListener('click', async () => {
             }
         );
         
-        appState.searchResults = response.jobs || [];
-        displayJobResults();
-        hideLoading();
+        const taskId = response.task_id;
+        console.log('Search task created:', taskId);
+        
+        // Start polling for results
+        await pollTaskStatus(taskId, query, location);
         
     } catch (error) {
         hideLoading();
         alert(`Search failed: ${error.message}`);
     }
 });
+
+async function pollTaskStatus(taskId, query, location) {
+    let attempts = 0;
+    const maxAttempts = API_CONFIG.POLLING.MAX_ATTEMPTS;
+    const interval = API_CONFIG.POLLING.INTERVAL;
+    
+    const poll = async () => {
+        try {
+            attempts++;
+            
+            // Update loading message with progress
+            const elapsed = Math.floor((attempts * interval) / 1000);
+            const loadingMessage = `Searching for ${query}... ${elapsed}s elapsed`;
+            
+            // Update the loading overlay text directly
+            if (elements.loadingText) {
+                elements.loadingText.textContent = loadingMessage;
+            }
+            
+            console.log(`Polling attempt ${attempts}/${maxAttempts} for task ${taskId}`);
+            
+            // Check task status
+            const taskResponse = await fetch(
+                `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.GET_TASK}/${taskId}`,
+                {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            
+            if (!taskResponse.ok) {
+                throw new Error(`Failed to check task status: ${taskResponse.status}`);
+            }
+            
+            const taskData = await taskResponse.json();
+            
+            console.log(`Task ${taskId} status:`, taskData.status, taskData);
+            
+            if (taskData.status === 'completed') {
+                // Task completed - display results
+                if (taskData.result && taskData.result.jobs) {
+                    appState.searchResults = taskData.result.jobs;
+                    appState.lastSearchResponse = {
+                        jobs: taskData.result.jobs,
+                        count: taskData.result.count
+                    };
+                    displayJobResults();
+                    hideLoading();
+                } else {
+                    hideLoading();
+                    alert('Search completed but no results found');
+                }
+                return;
+            } else if (taskData.status === 'failed') {
+                // Task failed
+                hideLoading();
+                alert(`Search failed: ${taskData.error_message || 'Unknown error'}`);
+                return;
+            } else if (taskData.status === 'processing' || taskData.status === 'pending') {
+                // Still processing - continue polling
+                if (attempts < maxAttempts) {
+                    setTimeout(poll, interval);
+                } else {
+                    // Timeout
+                    hideLoading();
+                    alert(`Search is taking longer than expected (${elapsed}s). The task may still be processing. Task ID: ${taskId}`);
+                }
+            }
+        } catch (error) {
+            console.error('Polling error:', error);
+            // Continue polling despite errors unless we've exceeded max attempts
+            if (attempts < maxAttempts) {
+                setTimeout(poll, interval);
+            } else {
+                hideLoading();
+                alert(`Failed to check search status after ${attempts} attempts: ${error.message}`);
+            }
+        }
+    };
+    
+    // Start polling
+    poll();
+}
 
 function displayJobResults() {
     if (appState.searchResults.length === 0) {
@@ -214,7 +302,11 @@ function displayJobResults() {
         return;
     }
     
-    elements.resultsCount.textContent = `Found ${appState.searchResults.length} jobs`;
+    // Check if mock data
+    const isMock = appState.lastSearchResponse?.mock === true;
+    const mockNotice = isMock ? ' (Demo data - Yutori integration in progress)' : '';
+    
+    elements.resultsCount.textContent = `Found ${appState.searchResults.length} jobs${mockNotice}`;
     elements.jobsContainer.innerHTML = '';
     
     appState.searchResults.forEach((job) => {
