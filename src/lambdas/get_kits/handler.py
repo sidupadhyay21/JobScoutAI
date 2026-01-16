@@ -1,68 +1,72 @@
 """
-Lambda function to get application kits
+Lambda function to upload resume
 """
 import json
+import base64
 
-from shared.dynamodb_utils import DynamoDBClient
 from shared.s3_utils import S3Client
 
 
 def lambda_handler(event, context):
     """
-    Get application kits
+    Upload resume to S3
     
-    Query parameters:
-    - job_id: filter kits by job (optional)
-    - kit_id: get specific kit (optional)
+    Request body:
+    {
+        "filename": "resume.pdf",
+        "content": "base64_encoded_pdf"
+    }
     """
     try:
-        # Parse query parameters
-        params = event.get('queryStringParameters') or {}
-        job_id = params.get('job_id')
-        kit_id = params.get('kit_id')
+        # Parse request
+        body = json.loads(event.get('body', '{}'))
+        filename = body.get('filename', 'resume.pdf')
         
-        # Initialize clients
-        db_client = DynamoDBClient()
-        s3_client = S3Client()
+        # Support both 'content' and 'file_content' for backwards compatibility
+        file_content_b64 = body.get('content') or body.get('file_content')
+        content_type = body.get('content_type', 'application/pdf')
         
-        if kit_id:
-            # Get specific kit
-            kit = db_client.get_kit(kit_id)
-            if not kit:
-                return {
-                    'statusCode': 404,
-                    'headers': {'Content-Type': 'application/json'},
-                    'body': json.dumps({'error': 'Kit not found'})
-                }
-            kits = [kit]
-        elif job_id:
-            # Get kits for specific job
-            kits = db_client.get_kits_by_job(job_id)
-        else:
+        if not file_content_b64:
             return {
                 'statusCode': 400,
-                'headers': {'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'Either job_id or kit_id is required'})
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'content or file_content is required'})
             }
         
-        # Add presigned URLs for cover letters
-        for kit in kits:
-            if kit.get('cover_letter_s3_key'):
-                kit['cover_letter_url'] = s3_client.get_presigned_url(
-                    kit['cover_letter_s3_key']
-                )
+        # Decode base64
+        file_content = base64.b64decode(file_content_b64)
+        
+        # Initialize S3 client
+        s3_client = S3Client()
+        
+        # Upload resume
+        s3_key = s3_client.upload_resume(
+            file_content=file_content,
+            content_type=content_type
+        )
+        
+        # Generate presigned URL
+        url = s3_client.get_presigned_url(s3_key)
         
         return {
             'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
-                'kits': kits,
-                'count': len(kits)
+                's3_key': s3_key,
+                'filename': filename,
+                'url': url,
+                'message': 'Resume uploaded successfully'
             })
         }
     
     except Exception as e:
-        print(f"Error in get_kits: {str(e)}")
+        print(f"Error in upload_resume: {str(e)}")
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'application/json'},

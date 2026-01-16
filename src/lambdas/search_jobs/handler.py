@@ -2,101 +2,118 @@
 Lambda function to search for jobs using Yutori Research API
 """
 import json
-import uuid
-from datetime import datetime
-
+import os
 from shared.yutori_client import YutoriClient
 from shared.dynamodb_utils import DynamoDBClient
 from shared.models import Job, JobStatus
-from shared.s3_utils import S3Client
 
 
 def lambda_handler(event, context):
     """
-    Search for jobs and store results in DynamoDB
+    Search for jobs using Yutori Research API
     
     Request body:
     {
-        "query": "software engineer Python",
+        "query": "software engineer",
         "location": "San Francisco, CA",
-        "max_results": 20
+        "max_results": 10
+    }
+    
+    Returns:
+    {
+        "jobs": [...],
+        "count": 10,
+        "task_id": "..."
     }
     """
     try:
-        # Parse request body
+        # Parse request
         body = json.loads(event.get('body', '{}'))
         query = body.get('query')
-        location = body.get('location')
+        location = body.get('location', '')
         max_results = body.get('max_results', 20)
         
         if not query:
             return {
                 'statusCode': 400,
-                'headers': {'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'query parameter is required'})
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'query is required'})
             }
         
         # Initialize clients
-        yutori_client = YutoriClient()
-        db_client = DynamoDBClient()
-        s3_client = S3Client()
+        yutori = YutoriClient()
+        dynamodb = DynamoDBClient()
         
-        # Search for jobs
-        print(f"Searching for jobs: {query} in {location}")
-        job_results = yutori_client.search_jobs(
-            query=query,
+        # Build search query
+        search_query = f"{query}"
+        if location:
+            search_query += f" in {location}"
+        
+        print(f"Searching for: {search_query}")
+        
+        # Call Yutori Research API
+        result = yutori.search_jobs(
+            query=search_query,
             location=location,
             max_results=max_results
         )
         
-        # Store jobs in DynamoDB
-        stored_jobs = []
-        for job_data in job_results:
+        print(f"Yutori response: {result}")
+        
+        # Parse and save jobs
+        jobs = []
+        if isinstance(result, list):
+            job_list = result
+        else:
+            job_list = result.get('jobs', [])
+            
+        for job_data in job_list:
             job = Job(
-                job_id=str(uuid.uuid4()),
-                title=job_data.get('title', ''),
-                company=job_data.get('company', ''),
+                title=job_data.get('title', 'Untitled'),
+                company=job_data.get('company', 'Unknown'),
                 location=job_data.get('location', location),
                 description=job_data.get('description', ''),
                 url=job_data.get('url', ''),
-                source=job_data.get('source', 'unknown'),
-                status=JobStatus.FOUND,
-                metadata=job_data.get('metadata', {})
+                posted_date=job_data.get('posted_date'),
+                salary_range=job_data.get('salary_range'),
+                status=JobStatus.SAVED
             )
             
-            db_client.create_job(job.to_dynamodb())
-            stored_jobs.append({
-                'job_id': job.job_id,
-                'title': job.title,
-                'company': job.company,
-                'location': job.location,
-                'url': job.url
-            })
-        
-        # Store raw search results in S3 for audit
-        s3_key = s3_client.upload_json_artifact(
-            data={
-                'query': query,
-                'location': location,
-                'timestamp': datetime.now().isoformat(),
-                'results': job_results
-            },
-            artifact_type='job_search',
-            reference_id=f"search_{int(datetime.now().timestamp())}"
-        )
+            # Save to DynamoDB
+            dynamodb.save_job(job)
+            jobs.append(job.to_dict())
         
         return {
             'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
-                'message': f'Found {len(stored_jobs)} jobs',
-                'jobs': stored_jobs,
-                'search_results_s3_key': s3_key
+                'jobs': jobs,
+                'count': len(jobs),
+                'message': 'Jobs retrieved successfully'
             })
         }
     
     except Exception as e:
         print(f"Error in search_jobs: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'error': str(e),
+                'message': 'Failed to search jobs'
+            })
+        }
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'application/json'},

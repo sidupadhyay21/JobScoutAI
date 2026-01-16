@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobScoutAI - Smart Job Application Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 JobScoutAI</h1>
+            <p class="subtitle">Your intelligent job application assistant</p>
+        </header>
+
+        <!-- Resume Upload Section -->
+        <section class="card" id="resume-section">
+            <h2>📄 Upload Your Resume</h2>
+            <div class="upload-area" id="upload-area">
+                <input type="file" id="resume-upload" accept=".pdf" hidden>
+                <label for="resume-upload" class="upload-label">
+                    <div class="upload-icon">📎</div>
+                    <p>Click to upload PDF or drag and drop</p>
+                    <p class="upload-hint">Maximum file size: 5MB</p>
+                </label>
+            </div>
+            <div id="upload-status" class="status-message" style="display: none;"></div>
+            <button id="upload-button" class="btn btn-primary" style="display: none;">
+                Upload Resume
+            </button>
+        </section>
+
+        <!-- Job Search Section -->
+        <section class="card" id="search-section">
+            <h2>🔍 Search for Jobs</h2>
+            <div class="form-group">
+                <label for="job-query">Job Title / Keywords</label>
+                <input 
+                    type="text" 
+                    id="job-query" 
+                    placeholder="e.g., software engineer, data scientist, product manager"
+                    value="software engineer"
+                >
+            </div>
+            <div class="form-group">
+                <label for="location">Location</label>
+                <input 
+                    type="text" 
+                    id="location" 
+                    placeholder="e.g., San Francisco, CA"
+                    value="San Francisco"
+                >
+            </div>
+            <div class="form-group">
+                <label for="max-results">Max Results</label>
+                <input 
+                    type="number" 
+                    id="max-results" 
+                    min="1" 
+                    max="50" 
+                    value="10"
+                >
+            </div>
+            <button id="search-button" class="btn btn-primary">
+                🔍 Search Jobs
+            </button>
+        </section>
+
+        <!-- Job Results Section -->
+        <section class="card" id="results-section" style="display: none;">
+            <h2>📊 Job Results</h2>
+            <div id="results-count" class="results-count"></div>
+            <div id="jobs-container" class="jobs-container"></div>
+        </section>
+
+        <!-- Application Kit Section -->
+        <section class="card" id="kit-section" style="display: none;">
+            <h2>📝 Generate Application Kit</h2>
+            <div id="selected-job-info" class="job-info"></div>
+            <div class="form-group">
+                <label for="user-context">Your Experience & Skills</label>
+                <textarea 
+                    id="user-context" 
+                    rows="5" 
+                    placeholder="Tell us about your experience, skills, and achievements to help tailor your application...&#10;&#10;Example: I have 5 years of Python development experience, worked on AWS microservices, led teams of 3-5 engineers, and specialize in building scalable backend systems."
+                ></textarea>
+            </div>
+            <button id="generate-kit-button" class="btn btn-success">
+                ✨ Generate Application Kit
+            </button>
+        </section>
+
+        <!-- Kit Display Section -->
+        <section class="card" id="kit-display-section" style="display: none;">
+            <h2>📋 Your Application Kit</h2>
+            
+            <div class="kit-item">
+                <h3>Cover Letter</h3>
+                <textarea 
+                    id="cover-letter-display" 
+                    rows="15" 
+                    readonly
+                    class="kit-display"
+                ></textarea>
+                <button id="download-cover-letter" class="btn btn-secondary">
+                    📥 Download Cover Letter
+                </button>
+            </div>
+
+            <div class="kit-item">
+                <h3>Resume Bullets</h3>
+                <textarea 
+                    id="resume-bullets-display" 
+                    rows="10" 
+                    readonly
+                    class="kit-display"
+                ></textarea>
+            </div>
+        </section>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay" style="display: none;">
+            <div class="spinner"></div>
+            <p id="loading-text">Processing...</p>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

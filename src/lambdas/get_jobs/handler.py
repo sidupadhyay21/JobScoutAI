@@ -1,46 +1,72 @@
 """
-Lambda function to get jobs list
+Lambda function to upload resume
 """
 import json
+import base64
 
-from shared.dynamodb_utils import DynamoDBClient
+from shared.s3_utils import S3Client
 
 
 def lambda_handler(event, context):
     """
-    Get list of jobs for user
+    Upload resume to S3
     
-    Query parameters:
-    - limit: max number of jobs to return (default: 50)
-    - status: filter by status (optional)
+    Request body:
+    {
+        "filename": "resume.pdf",
+        "content": "base64_encoded_pdf"
+    }
     """
     try:
-        # Parse query parameters
-        params = event.get('queryStringParameters') or {}
-        limit = int(params.get('limit', 50))
-        status_filter = params.get('status')
+        # Parse request
+        body = json.loads(event.get('body', '{}'))
+        filename = body.get('filename', 'resume.pdf')
         
-        # Initialize client
-        db_client = DynamoDBClient()
+        # Support both 'content' and 'file_content' for backwards compatibility
+        file_content_b64 = body.get('content') or body.get('file_content')
+        content_type = body.get('content_type', 'application/pdf')
         
-        # Get jobs
-        jobs = db_client.list_jobs(limit=limit)
+        if not file_content_b64:
+            return {
+                'statusCode': 400,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'content or file_content is required'})
+            }
         
-        # Filter by status if requested
-        if status_filter:
-            jobs = [job for job in jobs if job.get('status') == status_filter]
+        # Decode base64
+        file_content = base64.b64decode(file_content_b64)
+        
+        # Initialize S3 client
+        s3_client = S3Client()
+        
+        # Upload resume
+        s3_key = s3_client.upload_resume(
+            file_content=file_content,
+            content_type=content_type
+        )
+        
+        # Generate presigned URL
+        url = s3_client.get_presigned_url(s3_key)
         
         return {
             'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
-                'jobs': jobs,
-                'count': len(jobs)
+                's3_key': s3_key,
+                'filename': filename,
+                'url': url,
+                'message': 'Resume uploaded successfully'
             })
         }
     
     except Exception as e:
-        print(f"Error in get_jobs: {str(e)}")
+        print(f"Error in upload_resume: {str(e)}")
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'application/json'},

@@ -10,7 +10,6 @@ An intelligent Job Application Agent that automates job searching, generates tai
 - **📝 Tailored Application Kits**: Auto-generate customized cover letters and resume bullets
 - **🤖 Form Auto-Fill**: Use browser automation to pre-fill application forms (stops before submit)
 - **☁️ Cloud-Native**: Serverless AWS infrastructure (Lambda + DynamoDB + S3)
-- **🔌 Retool Integration**: Pre-built UI components for easy frontend development
 
 ## 🏗 Architecture
 
@@ -158,6 +157,12 @@ sam local start-api
 
 ```
 JobScoutAI/
+├── frontend/                # Web UI (HTML/CSS/JS)
+│   ├── index.html
+│   ├── styles.css
+│   ├── app.js
+│   ├── config.js
+│   └── README.md
 ├── src/
 │   ├── shared/              # Shared utilities (copied to each Lambda)
 │   │   ├── models.py        # Pydantic data models
@@ -186,10 +191,6 @@ JobScoutAI/
 3. Copy shared utilities: `cp -r src/shared src/lambdas/your_function/`
 4. Add function definition in `template.yaml`
 5. Build and deploy: `sam build && sam deploy`
-
-## 🔌 Retool Integration
-
-See [RETOOL_SETUP.md](RETOOL_SETUP.md) for detailed instructions on building a UI with Retool.
 
 **Quick Setup:**
 1. Import REST API resource with your API Gateway endpoint

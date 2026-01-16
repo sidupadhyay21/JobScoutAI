@@ -13,21 +13,27 @@ def lambda_handler(event, context):
     
     Request body:
     {
-        "file_content": "base64_encoded_pdf",
-        "content_type": "application/pdf"
+        "filename": "resume.pdf",
+        "content": "base64_encoded_pdf"
     }
     """
     try:
         # Parse request
         body = json.loads(event.get('body', '{}'))
-        file_content_b64 = body.get('file_content')
+        filename = body.get('filename', 'resume.pdf')
+        
+        # Support both 'content' and 'file_content' for backwards compatibility
+        file_content_b64 = body.get('content') or body.get('file_content')
         content_type = body.get('content_type', 'application/pdf')
         
         if not file_content_b64:
             return {
                 'statusCode': 400,
-                'headers': {'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'file_content is required'})
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'error': 'content or file_content is required'})
             }
         
         # Decode base64
@@ -47,9 +53,13 @@ def lambda_handler(event, context):
         
         return {
             'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
                 's3_key': s3_key,
+                'filename': filename,
                 'url': url,
                 'message': 'Resume uploaded successfully'
             })
