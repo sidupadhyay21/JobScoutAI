@@ -256,27 +256,6 @@ Content-Type: application/json
 }
 ```
 
-## 🔐 Security Notes
-
-> ⚠️ **This is a demo project for single-user use**
-
-**Current Security Status:**
-- ❌ No authentication/authorization
-- ❌ API endpoints are public
-- ✅ Yutori API key stored in AWS Parameter Store (encrypted)
-- ✅ IAM roles with least-privilege access
-
-**For Production Use:**
-- Add API Gateway authorization (IAM, Cognito, Lambda authorizer)
-- Implement rate limiting
-- Add request validation
-- Enable CloudWatch alarms
-- Use VPC endpoints for private access
-
-## 📄 License
-
-MIT License - Use freely for personal or commercial projects.
-
 ---
 
 **Your Current API Endpoint:** 
@@ -289,4 +268,4 @@ https://l5uknlmwf3.execute-api.us-west-2.amazonaws.com/prod
 - [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
 - [Retool Setup Guide](RETOOL_SETUP.md)
 
-**Built with ❤️ using Yutori AI + AWS**
+**Built with Yutori AI + AWS**
