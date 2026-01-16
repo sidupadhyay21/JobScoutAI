@@ -2,8 +2,17 @@
 Lambda function to get task status and results
 """
 import json
+from decimal import Decimal
 
 from shared.dynamodb_utils import DynamoDBClient
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """Helper class to convert DynamoDB Decimal types to JSON"""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super(DecimalEncoder, self).default(obj)
 
 
 def lambda_handler(event, context):
@@ -57,7 +66,7 @@ def lambda_handler(event, context):
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps(task)
+            'body': json.dumps(task, cls=DecimalEncoder)
         }
     
     except Exception as e:

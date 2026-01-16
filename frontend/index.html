@@ -116,6 +116,38 @@
                     class="kit-display"
                 ></textarea>
             </div>
+            
+            <button id="fill-form-button" class="btn btn-primary">
+                Fill Application Form
+            </button>
+        </section>
+
+        <!-- Form Filling Section -->
+        <section class="card" id="form-fill-section" style="display: none;">
+            <h2>Application Form Filling</h2>
+            <div id="form-fill-status" class="status-message"></div>
+            <div id="form-fill-result" class="form-fill-result" style="display: none;">
+                <h3>Form Filled Successfully</h3>
+                <div id="screenshot-container"></div>
+                <div id="filled-fields-container"></div>
+            </div>
+        </section>
+
+        <!-- Custom URL Form Filling -->
+        <section class="card" id="custom-url-section">
+            <h2>Fill Custom Application Form</h2>
+            <p class="subtitle">Provide any job application URL to auto-fill</p>
+            <div class="form-group">
+                <label for="custom-url">Application URL</label>
+                <input 
+                    type="url" 
+                    id="custom-url" 
+                    placeholder="https://company.com/jobs/apply/12345"
+                >
+            </div>
+            <button id="fill-custom-url-button" class="btn btn-primary">
+                Fill Custom Form
+            </button>
         </section>
 
         <!-- Loading Overlay -->
