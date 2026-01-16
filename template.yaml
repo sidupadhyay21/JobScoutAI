@@ -1,0 +1,252 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: JobScoutAI - Job Application Agent Backend
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 512
+    Runtime: python3.11
+    Environment:
+      Variables:
+        JOBS_TABLE_NAME: !Ref JobsTable
+        KITS_TABLE_NAME: !Ref KitsTable
+        TASKS_TABLE_NAME: !Ref TasksTable
+        S3_BUCKET_NAME: !Ref ArtifactsBucket
+        YUTORI_API_KEY: !Ref YutoriApiKey
+
+Parameters:
+  YutoriApiKey:
+    Type: String
+    NoEcho: true
+    Description: Yutori API Key for Research and Browsing APIs
+
+Resources:
+  # API Gateway
+  JobScoutAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # Lambda Functions
+  SearchJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/search_jobs/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - S3CrudPolicy:
+            BucketName: !Ref ArtifactsBucket
+      Events:
+        SearchJobs:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobScoutAPI
+            Path: /jobs/search
+            Method: post
+
+  GenerateKitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/generate_kit/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref KitsTable
+        - S3CrudPolicy:
+            BucketName: !Ref ArtifactsBucket
+      Events:
+        GenerateKit:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobScoutAPI
+            Path: /kits/generate
+            Method: post
+
+  FillFormFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/fill_form/
+      Handler: handler.lambda_handler
+      Timeout: 600
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref KitsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+        - S3CrudPolicy:
+            BucketName: !Ref ArtifactsBucket
+      Events:
+        FillForm:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobScoutAPI
+            Path: /forms/fill
+            Method: post
+
+  GetJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/get_jobs/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref JobsTable
+      Events:
+        GetJobs:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobScoutAPI
+            Path: /jobs
+            Method: get
+
+  GetKitsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/get_kits/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref KitsTable
+        - S3ReadPolicy:
+            BucketName: !Ref ArtifactsBucket
+      Events:
+        GetKits:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobScoutAPI
+            Path: /kits
+            Method: get
+
+  UploadResumeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/lambdas/upload_resume/
+      Handler: handler.lambda_handler
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref ArtifactsBucket
+      Events:
+        UploadResume:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JobScoutAPI
+            Path: /resume/upload
+            Method: post
+
+  # DynamoDB Tables
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: JobScoutAI-Jobs
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: N
+      KeySchema:
+        - AttributeName: job_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: user-created-index
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  KitsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: JobScoutAI-Kits
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: kit_id
+          AttributeType: S
+        - AttributeName: job_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: kit_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: job-index
+          KeySchema:
+            - AttributeName: job_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: JobScoutAI-Tasks
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: task_id
+          AttributeType: S
+        - AttributeName: job_id
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: task_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: job-status-index
+          KeySchema:
+            - AttributeName: job_id
+              KeyType: HASH
+            - AttributeName: status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # S3 Bucket
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'jobscoutai-artifacts-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedHeaders:
+              - '*'
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${JobScoutAPI}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  JobsTableName:
+    Description: "Jobs DynamoDB Table"
+    Value: !Ref JobsTable
+  KitsTableName:
+    Description: "Kits DynamoDB Table"
+    Value: !Ref KitsTable
+  TasksTableName:
+    Description: "Tasks DynamoDB Table"
+    Value: !Ref TasksTable
+  ArtifactsBucketName:
+    Description: "S3 Bucket for artifacts"
+    Value: !Ref ArtifactsBucket
